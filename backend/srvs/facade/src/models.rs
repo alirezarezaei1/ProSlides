@@ -21,6 +21,7 @@ pub struct Question {
     pub question_time: u32,
     pub max_point: f64,
     pub min_point: f64,
+    pub has_multiple: bool,
     pub options: Vec<OptionItem>,
 }
 
@@ -93,7 +94,6 @@ pub struct QuizSetupMessage(pub QuizSetup);
 pub struct Room {
     pub players: HashSet<Addr<PlayerSession>>,
     pub manager: Option<Addr<ManagerSession>>,
-    pub quiz_setup: Option<QuizSetup>,
     pub ok_responses: usize,
     pub last_question: Option<Question>,
     pub redis_client: redis::Client,
@@ -106,17 +106,22 @@ pub struct Room {
 pub struct QuizSetup {
     pub quiz_id: u32,
     pub title: String,
-    #[serde(default)]
-    pub background: Option<String>,
+    pub background: Background,
     #[serde(default)]
     pub music_url: Option<String>,
     pub slides: Vec<Slide>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Background {
+    pub color: String,
+    pub image: String,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Slide {
     pub slide_id: u64,
-    pub slide_type: u8, // 1 = question, 2 = leaderboard
+    pub slide_type: u8, // 1 = question, 2 = content, 3 = leaderboard
     pub order: u16,
     #[serde(default)]
     pub show_leaderboad_after: Option<bool>,
@@ -129,7 +134,28 @@ pub struct Slide {
     #[serde(default)]
     pub question: Option<QuizQuestion>,
     #[serde(default)]
-    pub leaderboard: Option<String>,
+    pub leaderboard: Vec<LeaderboardEntry>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LeaderboardEntry {
+    #[serde(default)]
+    pub rust_session_id: String,
+    #[serde(default)]
+    pub player_name: String,
+    #[serde(default)]
+    pub avatar: String,
+    #[serde(default)]
+    pub score: u32,
+    #[serde(default)]
+    pub time_taken: f32,
+    #[serde(default)]
+    pub rank: u16,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct LeaderboardUpdate {
+    pub leaderboard: Vec<LeaderboardEntry>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -142,7 +168,7 @@ pub struct QuizQuestion {
     pub question_type: String,
     #[serde(default)]
     pub image_url: Option<String>,
-    pub partial_scoring: u8,
+    pub partial_scoring: bool,
     pub time_limit: u32,
     #[serde(default)]
     pub max_point: f64,
@@ -160,7 +186,7 @@ pub struct QuizOption {
     pub is_correct: bool,
     pub votes: u32,
     #[serde(default)]
-    pub image: Option<String>,
+    pub image_url: Option<String>,
 }
 //
 // Messages used by Room ↔ Player
@@ -190,15 +216,8 @@ pub struct PlayerSession {
     pub character: Option<String>,
     pub session_id: String,
     pub redis_client: redis::Client,
-    pub quiz_setup: QuizSetup,
+    pub quiz_setup: Option<QuizSetup>,
 }
-/*
-#[derive(Deserialize)]
-pub struct PlayerAnswer {
-    pub question_id: i64,
-    pub options_result: Vec<OptionPick>
-}
-*/
 
 #[derive(Deserialize)]
 pub struct OptionPick {
