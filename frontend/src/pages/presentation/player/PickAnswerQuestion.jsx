@@ -186,6 +186,7 @@ export default function PlayerPickAnswerQuestion({
               <div className="border-white border-2 bg-[rgba(255,255,255,0.3)] h-2 rounded-[5px] mt-3 mb-5 overflow-hidden">
                 <div
                   className="h-full bg-purple-600"
+
                   style={{
                     width: "100%",
                     // Use GPU-accelerated transform instead of animating width.
@@ -202,6 +203,7 @@ export default function PlayerPickAnswerQuestion({
                       Math.min(1, progressPercent / 100)
                     )})`,
                     WebkitTransformOrigin: "left",
+
                   }}
                 ></div>
               </div>
