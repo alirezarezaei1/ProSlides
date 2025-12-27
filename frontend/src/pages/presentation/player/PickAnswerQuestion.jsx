@@ -12,6 +12,7 @@ export default function PlayerPickAnswerQuestion({
   const { questionResults, partialQuestionResults } = useServerData();
   const { sendMessage, isConnected } = useWebSocket();
 
+
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(question?.question_time || 0);
@@ -199,6 +200,7 @@ export default function PlayerPickAnswerQuestion({
                 let optionClass = "";
                 let icon = null;
 
+
                 if (showResults && result?.optionsResult) {
                   // نتیجه از type:3 میاد با فرمت { option_id, answer: true/false }
                   // مقایسه با تبدیل به string برای اطمینان
@@ -215,6 +217,7 @@ export default function PlayerPickAnswerQuestion({
 
                   if (selectedOptions.includes(goz) && submitted) {
                     optionClass = isCorrect
+
                       ? "bg-green-600 text-white"
                       : "bg-red-600 text-white";
                   }

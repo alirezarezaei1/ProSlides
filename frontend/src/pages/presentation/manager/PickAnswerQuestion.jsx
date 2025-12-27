@@ -484,6 +484,7 @@ export default function ManagerPickAnswerQuestion({
                         className={`w-3/4 transition-all duration-1000 ${
                           hasImage ? "rounded-b-lg" : "rounded-t-lg"
                         }
+
                         ${
                           hasReceivedResults
                             ? isCorrect
@@ -499,6 +500,7 @@ export default function ManagerPickAnswerQuestion({
                             ? `${Math.max(height, 5)}%`
                             : "0%",
                         }}
+
                       ></div>
 
                       {/* متن گزینه */}
