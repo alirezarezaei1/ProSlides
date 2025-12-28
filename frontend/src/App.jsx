@@ -23,6 +23,7 @@ import { ServerDataProvider } from "./contexts/ServerDataContext";
 import { useServerData } from "./hooks/useServerData";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { AudioProvider, useAudio } from "./contexts/AudioContext";
+import SessionDetail from "./pages/report/SessionDetail";
 
 import HomePage from "./pages/quiz/manager/HomePage";
 import EditorPage from "./pages/quiz/manager/EditorPage";
@@ -37,10 +38,14 @@ export default function App() {
             element={<PresentationRouter />}
           />
           {/* Manager/Role panel (supports both /manager and any role param) */}
-          <Route path="/:roomId/:role/panel" element={<HomePage />} />
-          <Route path="/:roomId/:role/panel/editor" element={<EditorPage />} />
+          <Route path="/:role/panel" element={<HomePage />} />
+          <Route path="/:role/panel/:roomId" element={<EditorPage />} />
           {/* Catch-all route for any undefined path */}
           <Route path="*" element={<Waiting />} />
+          <Route
+            path="/:role/panel/:quizId/report"
+            element={<SessionDetail />}
+          />
         </Routes>
       </ServerDataProvider>
     </Router>
