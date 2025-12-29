@@ -127,7 +127,7 @@ class ExportSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Quiz
-        fields = ['quiz_id', 'title', 'background', 'music_url', 'slides']
+        fields = ['quiz_id', 'title', 'access_code', 'background', 'music_url', 'slides']
 
     def get_background(self, obj):
         return {
@@ -195,3 +195,12 @@ class LeaderboardReceiveItemSerializer(serializers.Serializer):
 
 class LeaderboardReceiveSerializer(serializers.Serializer):
     leaderboard = LeaderboardReceiveItemSerializer(many=True)
+
+
+class QuestionOptionResultSerializer(serializers.Serializer):
+    option_id = serializers.IntegerField(min_value=1)
+    number_of_submits = serializers.IntegerField(min_value=0)
+
+
+class QuestionResultsReceiveSerializer(serializers.Serializer):
+    options = QuestionOptionResultSerializer(many=True)
