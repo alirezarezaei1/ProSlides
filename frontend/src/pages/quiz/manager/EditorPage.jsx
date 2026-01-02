@@ -8,7 +8,12 @@ import SlidesPanel from "./SlidesPanel";
 import RightToolbar from "./RightToolbar";
 import DesignPanel from "./DesignPanel";
 import AudioPanel from "./AudioPanel";
+<<<<<<< Updated upstream
 import { quizService } from "../../../services/quizService"; 
+=======
+import { quizService } from "../../../services/quizService";
+import Waiting from "../../loading/LoadingPage";
+>>>>>>> Stashed changes
 
 export default function EditorPage() {
   const navigate = useNavigate();
@@ -46,6 +51,7 @@ export default function EditorPage() {
     setQuiz(updatedQuiz);
   };
 
+<<<<<<< Updated upstream
   const saveQuiz = async () => {
     if (!quiz) return;
     
@@ -59,12 +65,10 @@ export default function EditorPage() {
     }
   };
 
+=======
+>>>>>>> Stashed changes
   if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="text-xl text-purple-700">Loading Quiz...</div>
-      </div>
-    );
+    return <Waiting />;
   }
 
   if (error || !quiz) {
@@ -800,4 +804,8 @@ function QuestionEditor({ quiz, updateQuiz, saveQuiz }) {
       </div>
     </div>
   );
+<<<<<<< Updated upstream
 }
+=======
+}
+>>>>>>> Stashed changes
