@@ -168,14 +168,61 @@ def decode_google_id_token(token):
 
 def send_verification_email(user, code):
     ttl_minutes = settings.EMAIL_VERIFICATION_CODE_TTL_MINUTES
+
+    subject = "کد تأیید ورود به ProSlides"
+
+    text_message = (
+        "کاربر گرامی،\n\n"
+        "کد تأیید ورود شما به ProSlides:\n\n"
+        f"{code}\n\n"
+        f"این کد تا {ttl_minutes} دقیقه معتبر است.\n\n"
+        "اگر شما این درخواست را ثبت نکرده‌اید، لطفاً این ایمیل را نادیده بگیرید."
+    )
+
+    html_message = f"""
+    <div style="font-family:Tahoma, Arial, sans-serif; line-height:1.8; color:#111827; background:#ffffff;">
+      <h2 style="margin:0 0 16px; font-size:20px; font-weight:700;">
+        کد تأیید ورود به ProSlides
+      </h2>
+
+      <p style="margin:0 0 12px;">
+        کاربر گرامی،
+      </p>
+
+      <p style="margin:0 0 12px;">
+        برای ادامه ورود به حساب کاربری، کد تأیید زیر را وارد کنید:
+      </p>
+
+      <div style="
+        display:inline-block;
+        padding:12px 20px;
+        border-radius:12px;
+        background:#eef2ff;
+        font-size:22px;
+        font-weight:700;
+        letter-spacing:3px;
+        color:#1e3a8a;
+        margin:8px 0 16px;
+      ">
+        {code}
+      </div>
+
+      <p style="margin:0 0 8px;">
+        این کد تا <strong>{ttl_minutes} دقیقه</strong> معتبر است.
+      </p>
+
+      <p style="margin:16px 0 0; color:#6b7280; font-size:13px;">
+        اگر شما این درخواست را ثبت نکرده‌اید، می‌توانید با خیال راحت این ایمیل را نادیده بگیرید.
+      </p>
+    </div>
+    """
+
     send_mail(
-        subject="کد ورود ProSlides",
-        message=(
-            "کد ورود شما به ProSlides: {code}\n"
-            "این کد تا {ttl} دقیقه معتبر است."
-        ).format(code=code, ttl=ttl_minutes),
+        subject=subject,
+        message=text_message,
         from_email=settings.EMAIL_FROM_ADDRESS,
         recipient_list=[user.email],
+        html_message=html_message,
         fail_silently=False,
     )
 
@@ -199,7 +246,8 @@ def _enforce_single_choice_correct(question, exclude_option_id=None):
     if exclude_option_id is not None:
         existing = existing.exclude(pk=exclude_option_id)
     if existing.exists():
-        raise ValidationError({"detail": "Single choice questions can only have one correct option."})
+        raise ValidationError(
+            {"detail": "Single choice questions can only have one correct option."})
 
 
 def _enforce_slide_type(slide, expected_type, expected_label):
@@ -349,7 +397,8 @@ class QuizViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='list')
     def list_quizzes(self, request):
         queryset = self.get_queryset()
-        queryset = queryset.annotate(slides_count=Count('slides', distinct=True))
+        queryset = queryset.annotate(
+            slides_count=Count('slides', distinct=True))
         queryset = queryset.order_by('-created_at')
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -381,7 +430,7 @@ class QuizViewSet(viewsets.ModelViewSet):
         """
         صادرات کامل کوئیز برای اجرا در Rust
 
-        این endpoint تمام اطلاعات کوئیز شامل اسلایدها، سوالات و گزینه‌ها را 
+        این endpoint تمام اطلاعات کوئیز شامل اسلایدها، سوالات و گزینه‌ها را
         به فرمت مورد نیاز Rust برمی‌گرداند.
         """
         if getattr(request, "_export_service_token_valid", False):
@@ -590,7 +639,8 @@ class SlideViewSet(viewsets.ModelViewSet):
         return Slide.objects.filter(quiz_id=self.kwargs['quiz_pk'], quiz__owner=self.request.user)
 
     def perform_create(self, serializer):
-        quiz = get_object_or_404(Quiz, pk=self.kwargs['quiz_pk'], owner=self.request.user)
+        quiz = get_object_or_404(
+            Quiz, pk=self.kwargs['quiz_pk'], owner=self.request.user)
         order = serializer.validated_data.get('order')
         if order is not None and order < 1:
             raise ValidationError({'order': 'must be a positive integer'})
@@ -598,7 +648,8 @@ class SlideViewSet(viewsets.ModelViewSet):
         try:
             with transaction.atomic():
                 if order is not None:
-                    Slide.objects.filter(quiz=quiz, order__gte=order).update(order=F('order') + 1)
+                    Slide.objects.filter(quiz=quiz, order__gte=order).update(
+                        order=F('order') + 1)
                 serializer.save(quiz=quiz, order=order)
                 touch_quiz(quiz.pk)
         except DjangoValidationError as exc:
@@ -628,7 +679,8 @@ class SlideViewSet(viewsets.ModelViewSet):
         slides.insert(insert_pos, instance)
 
         # Temporarily shift all orders to avoid unique constraint clashes
-        offset = (Slide.objects.filter(quiz=quiz).aggregate(max_order=Max('order'))['max_order'] or 0) + 1000
+        offset = (Slide.objects.filter(quiz=quiz).aggregate(
+            max_order=Max('order'))['max_order'] or 0) + 1000
         Slide.objects.filter(quiz=quiz).update(order=F('order') + offset)
 
         # Apply final ordering
@@ -638,7 +690,8 @@ class SlideViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer = self.get_serializer(
+            instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
 
         quiz = instance.quiz
@@ -736,7 +789,8 @@ class QuestionViewSet(viewsets.ViewSet):
 
         هر اسلاید فقط می‌تواند یک سوال داشته باشد.
         """
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
+        slide = get_object_or_404(
+            Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
         _enforce_slide_type(slide, 1, "question")
 
         with transaction.atomic():
@@ -801,9 +855,11 @@ class QuestionViewSet(viewsets.ViewSet):
             serializer = QuestionSerializer(
                 question, data=request.data, partial=False)
             serializer.is_valid(raise_exception=True)
-            new_type = serializer.validated_data.get("question_type", question.question_type)
+            new_type = serializer.validated_data.get(
+                "question_type", question.question_type)
             if new_type == "single":
-                correct_count = Option.objects.filter(question=question, is_correct=True).count()
+                correct_count = Option.objects.filter(
+                    question=question, is_correct=True).count()
                 if correct_count > 1:
                     return Response(
                         {"detail": "Single choice questions can only have one correct option."},
@@ -867,9 +923,11 @@ class QuestionViewSet(viewsets.ViewSet):
             serializer = QuestionSerializer(
                 question, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
-            new_type = serializer.validated_data.get("question_type", question.question_type)
+            new_type = serializer.validated_data.get(
+                "question_type", question.question_type)
             if new_type == "single":
-                correct_count = Option.objects.filter(question=question, is_correct=True).count()
+                correct_count = Option.objects.filter(
+                    question=question, is_correct=True).count()
                 if correct_count > 1:
                     return Response(
                         {"detail": "Single choice questions can only have one correct option."},
@@ -1013,7 +1071,8 @@ class OptionViewSet(viewsets.ModelViewSet):
             ).update(order=F('order') - offset - 1)
 
     def _reorder_options(self, question, instance, new_order):
-        options = list(Option.objects.filter(question=question).order_by('order'))
+        options = list(Option.objects.filter(
+            question=question).order_by('order'))
         options = [opt for opt in options if opt.pk != instance.pk]
         insert_pos = max(0, min(len(options), new_order - 1))
         options.insert(insert_pos, instance)
@@ -1024,7 +1083,8 @@ class OptionViewSet(viewsets.ModelViewSet):
             .get('max_order') or 0
         )
         offset = max_order + 1000
-        Option.objects.filter(question=question).update(order=F('order') + offset)
+        Option.objects.filter(question=question).update(
+            order=F('order') + offset)
 
         for idx, option in enumerate(options, start=1):
             Option.objects.filter(pk=option.pk).update(order=idx)
@@ -1071,11 +1131,13 @@ class OptionViewSet(viewsets.ModelViewSet):
         if new_order is not None and new_order < 1:
             raise ValidationError({'order': 'must be a positive integer'})
         if serializer.validated_data.get("is_correct"):
-            _enforce_single_choice_correct(instance.question, exclude_option_id=instance.pk)
+            _enforce_single_choice_correct(
+                instance.question, exclude_option_id=instance.pk)
         try:
             with transaction.atomic():
                 if new_order != instance.order:
-                    self._reorder_options(instance.question, instance, new_order)
+                    self._reorder_options(
+                        instance.question, instance, new_order)
                 instance = serializer.save(order=new_order)
             touch_quiz(instance.question.slide.quiz_id)
         except DjangoValidationError as exc:
@@ -1110,7 +1172,8 @@ class ContentViewSet(viewsets.ViewSet):
     )
     def retrieve(self, request, quiz_pk=None, slide_pk=None):
         """دریافت محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
+        slide = get_object_or_404(
+            Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
         _enforce_slide_type(slide, 2, "content")
         return Response({
             'title': slide.title,
@@ -1133,7 +1196,8 @@ class ContentViewSet(viewsets.ViewSet):
     )
     def update(self, request, quiz_pk=None, slide_pk=None):
         """آپدیت محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
+        slide = get_object_or_404(
+            Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
         _enforce_slide_type(slide, 2, "content")
         try:
             slide.title = request.data.get('title', slide.title)
@@ -1186,7 +1250,8 @@ class ContentViewSet(viewsets.ViewSet):
     )
     def destroy(self, request, quiz_pk=None, slide_pk=None):
         """حذف محتوای اسلاید"""
-        slide = get_object_or_404(Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
+        slide = get_object_or_404(
+            Slide, pk=slide_pk, quiz_id=quiz_pk, quiz__owner=request.user)
         _enforce_slide_type(slide, 2, "content")
         try:
             slide.title = None
@@ -1265,7 +1330,6 @@ class PlayerSessionViewSet(viewsets.ModelViewSet):
             owner=self.request.user,
         )
         serializer.save(quiz=quiz)
-
 
 
 class LeaderboardReceiveView(viewsets.ViewSet):
@@ -1431,7 +1495,8 @@ class LeaderboardReceiveView(viewsets.ViewSet):
                     if player_session.avatar != avatar:
                         updates['avatar'] = avatar
                     if updates:
-                        PlayerSession.objects.filter(pk=player_session.pk).update(**updates)
+                        PlayerSession.objects.filter(
+                            pk=player_session.pk).update(**updates)
                         for key, value in updates.items():
                             setattr(player_session, key, value)
                 else:
@@ -1554,7 +1619,8 @@ class QuestionResultsReceiveView(viewsets.ViewSet):
             )
 
         question_option_ids = list(
-            Option.objects.filter(question=question).values_list('id', flat=True)
+            Option.objects.filter(
+                question=question).values_list('id', flat=True)
         )
         provided_ids = set(option_ids)
         expected_ids = set(question_option_ids)
@@ -1570,7 +1636,8 @@ class QuestionResultsReceiveView(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        votes_map = {item['option_id']: item['number_of_submits'] for item in options_data}
+        votes_map = {item['option_id']: item['number_of_submits']
+                     for item in options_data}
         with transaction.atomic():
             options = list(
                 Option.objects
@@ -1667,7 +1734,8 @@ class VerifyEmailView(APIView):
                 "Email verified",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
                 examples={"application/json": {"detail": "Email verified"}},
             ),
@@ -1675,17 +1743,21 @@ class VerifyEmailView(APIView):
                 "Invalid or expired code",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
-                examples={"application/json": {"detail": "Invalid email or code"}},
+                examples={
+                    "application/json": {"detail": "Invalid email or code"}},
             ),
             429: openapi.Response(
                 "Too many failed attempts",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
-                examples={"application/json": {"detail": "Too many failed attempts"}},
+                examples={
+                    "application/json": {"detail": "Too many failed attempts"}},
             ),
         },
         tags=["Auth"]
@@ -1706,7 +1778,8 @@ class VerifyEmailView(APIView):
         if user.is_active:
             return Response({"detail": "Email already verified"})
 
-        verification = EmailVerification.objects.filter(user=user, is_verified=False).first()
+        verification = EmailVerification.objects.filter(
+            user=user, is_verified=False).first()
         if not verification or verification.code is None:
             return Response(
                 {"detail": "Verification code not found"},
@@ -1756,17 +1829,21 @@ class ResendVerificationView(APIView):
                 "Verification code sent",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
-                examples={"application/json": {"detail": "Verification code sent"}},
+                examples={
+                    "application/json": {"detail": "Verification code sent"}},
             ),
             429: openapi.Response(
                 "Please wait before requesting a new code",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
-                examples={"application/json": {"detail": "Please wait before requesting a new code."}},
+                examples={
+                    "application/json": {"detail": "Please wait before requesting a new code."}},
             ),
         },
         tags=["Auth"]
@@ -1798,8 +1875,10 @@ class ResendVerificationView(APIView):
 
         resend_wait = settings.EMAIL_VERIFICATION_RESEND_SECONDS
         if verification.sent_at and (timezone.now() - verification.sent_at).total_seconds() < resend_wait:
-            remaining = int(resend_wait - (timezone.now() - verification.sent_at).total_seconds())
-            expires_remaining = int((verification.expires_at - timezone.now()).total_seconds())
+            remaining = int(resend_wait - (timezone.now() -
+                            verification.sent_at).total_seconds())
+            expires_remaining = int(
+                (verification.expires_at - timezone.now()).total_seconds())
             return Response(
                 {
                     "detail": "Please wait before requesting a new code.",
@@ -1865,17 +1944,21 @@ class GoogleAuthView(APIView):
                 "Invalid token",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
-                examples={"application/json": {"detail": "Invalid Google token"}},
+                examples={
+                    "application/json": {"detail": "Invalid Google token"}},
             ),
             500: openapi.Response(
                 "Google auth not configured",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
-                examples={"application/json": {"detail": "Google auth is not configured"}},
+                examples={
+                    "application/json": {"detail": "Google auth is not configured"}},
             ),
         },
         tags=["Auth"],
@@ -1910,7 +1993,8 @@ class GoogleAuthView(APIView):
         normalized_email = User.objects.normalize_email(email)
         user = User.objects.filter(email__iexact=normalized_email).first()
         if not user:
-            user = User.objects.filter(username__iexact=normalized_email).first()
+            user = User.objects.filter(
+                username__iexact=normalized_email).first()
 
         created = False
         if not user:
@@ -1967,12 +2051,18 @@ class PasswordResetRequestView(APIView):
                 "If the account exists, a reset link was sent",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={
+                        "detail": openapi.Schema(type=openapi.TYPE_STRING)
+                    },
                 ),
-                examples={"application/json": {"detail": "If the account exists, a reset link was sent"}},
+                examples={
+                    "application/json": {
+                        "detail": "If the account exists, a reset link was sent"
+                    }
+                },
             )
         },
-        tags=["Auth"]
+        tags=["Auth"],
     )
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -1980,17 +2070,71 @@ class PasswordResetRequestView(APIView):
 
         email = serializer.validated_data["email"]
         user = User.objects.filter(email__iexact=email).first()
+
         if user and user.is_active:
             token = default_token_generator.make_token(user)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
-            reset_link = settings.PASSWORD_RESET_URL_TEMPLATE.format(uid=uid, token=token)
+            reset_link = settings.PASSWORD_RESET_URL_TEMPLATE.format(
+                uid=uid, token=token
+            )
+
+            subject = "بازیابی رمز عبور حساب ProSlides"
+
+            text_message = (
+                "کاربر گرامی،\n\n"
+                "درخواستی برای بازیابی رمز عبور حساب شما در ProSlides ثبت شده است.\n\n"
+                "برای تنظیم رمز عبور جدید، از لینک زیر استفاده کنید:\n"
+                f"{reset_link}\n\n"
+                "اگر شما این درخواست را ثبت نکرده‌اید، می‌توانید این ایمیل را نادیده بگیرید."
+            )
+
+            html_message = f"""
+            <div dir="rtl" style="font-family:Tahoma, Arial, sans-serif; line-height:1.8; color:#111827; background:#ffffff; text-align:right;">
+              <h2 style="margin:0 0 16px; font-size:20px; font-weight:700;">
+                بازیابی رمز عبور حساب ProSlides
+              </h2>
+
+              <p style="margin:0 0 12px;">
+                کاربر گرامی،
+              </p>
+
+              <p style="margin:0 0 12px;">
+                درخواستی برای بازیابی رمز عبور حساب شما ثبت شده است.  
+                برای تعیین رمز عبور جدید، روی دکمه زیر کلیک کنید:
+              </p>
+
+              <a href="{reset_link}" style="
+                display:inline-block;
+                padding:12px 20px;
+                border-radius:12px;
+                background:#4f46e5;
+                color:#ffffff;
+                text-decoration:none;
+                font-weight:600;
+                margin:8px 0 16px;
+              ">
+                بازیابی رمز عبور
+              </a>
+
+              <p style="margin:12px 0 0; word-break:break-all;">
+                اگر دکمه بالا برای شما کار نکرد، می‌توانید از لینک زیر استفاده کنید:<br />
+                <a href="{reset_link}" style="color:#4f46e5;">
+                  {reset_link}
+                </a>
+              </p>
+
+              <p style="margin:16px 0 0; color:#6b7280; font-size:13px;">
+                اگر شما این درخواست را ثبت نکرده‌اید، می‌توانید با خیال راحت این ایمیل را نادیده بگیرید.
+              </p>
+            </div>
+            """
+
             send_mail(
-                subject="ProSlides password reset",
-                message=(
-                    "Use the link below to reset your password:\n{link}"
-                ).format(link=reset_link),
+                subject=subject,
+                message=text_message,
                 from_email=settings.EMAIL_FROM_ADDRESS,
                 recipient_list=[user.email],
+                html_message=html_message,
                 fail_silently=False,
             )
 
@@ -2010,7 +2154,8 @@ class PasswordResetConfirmView(APIView):
                 "Password updated",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
                 examples={"application/json": {"detail": "Password updated"}},
             ),
@@ -2018,7 +2163,8 @@ class PasswordResetConfirmView(APIView):
                 "Invalid token",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
                 examples={"application/json": {"detail": "Invalid token"}},
             ),
@@ -2067,7 +2213,8 @@ class LogoutView(APIView):
                 "Logged out",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
                 examples={"application/json": {"detail": "Logged out"}},
             ),
@@ -2075,7 +2222,8 @@ class LogoutView(APIView):
                 "Invalid token",
                 schema=openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    properties={"detail": openapi.Schema(type=openapi.TYPE_STRING)},
+                    properties={"detail": openapi.Schema(
+                        type=openapi.TYPE_STRING)},
                 ),
                 examples={"application/json": {"detail": "Invalid token"}},
             ),
@@ -2159,7 +2307,8 @@ class ThrottledTokenRefreshView(TokenRefreshView):
                         "access": openapi.Schema(type=openapi.TYPE_STRING),
                     },
                 ),
-                examples={"application/json": {"access": "new-jwt-access-token"}},
+                examples={
+                    "application/json": {"access": "new-jwt-access-token"}},
             ),
             401: openapi.Response("Invalid token"),
         },
@@ -2167,4 +2316,3 @@ class ThrottledTokenRefreshView(TokenRefreshView):
     )
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
-
