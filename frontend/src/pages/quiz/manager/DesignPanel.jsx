@@ -1,9 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { Palette, X, Upload, Trash2, Save, Link } from "lucide-react";
-import { quizService } from "../../../services/quizService"; 
+import { X, Trash2, Save, Link } from "lucide-react";
+import { quizService } from "../../../services/quizService";
+import { ErrorModal } from "./ErrorModal";
+import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
 
 
-export default function DesignPanel({ quiz, updateQuiz, onClose }) {
+export default function DesignPanel({
+  quiz,
+  updateQuiz,
+  onClose,
+  setBackgroundSaveNotice,
+  onDirtyChange,
+}) {
+
   const [activeTab, setActiveTab] = useState("color");
   const [localQuiz, setLocalQuiz] = useState({ ...quiz });
   const [hasChanges, setHasChanges] = useState(false);
@@ -13,19 +22,31 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [errorForModal, setErrorForModal] = useState(null);
+  const [errorModalOpen, setErrorModalOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    description: "",
+    onConfirm: null,
+    confirmText: "",
+    cancelText: "",
+  });
 
-  // تنظیم مقادیر اولیه
+
+  // Setting the initial value when loading the component
   useEffect(() => {
     setOriginalQuiz({ ...quiz });
     setLocalQuiz({ ...quiz });
-    // اگر background_image_url موجود است
+    
     if (quiz.background_image_url) {
       setImageUrl(quiz.background_image_url);
       setPreview(quiz.background_image_url);
     }
   }, [quiz]);
 
-  // تشخیص تغییرات
+
+  // Detecting changes from the initial value
   useEffect(() => {
     const hasBgColorChanged = localQuiz.background_color !== originalQuiz.background_color;
     const hasBgImageChanged = localQuiz.background_image_url !== originalQuiz.background_image_url;
@@ -33,10 +54,20 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
     setHasChanges(hasBgColorChanged || hasBgImageChanged);
   }, [localQuiz, originalQuiz]);
 
+  useEffect(() => {
+    if (onDirtyChange) {
+      onDirtyChange(hasChanges);
+    }
+  }, [hasChanges, onDirtyChange]);
 
+  const closeErrorModal = () => {
+    setErrorModalOpen(false);
+  };
+
+  // Image link testing and preview
   const testImageLoad = () => {
     if (!imageUrl.trim()) {
-      setError("Please enter the link");
+      setError("Please enter the link.");
       return;
     }
 
@@ -55,13 +86,12 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
       setLocalQuiz({
         ...localQuiz,
         background_image_url: imageUrl,
-        // وقتی عکس انتخاب می‌شود، background_color را undefined می‌گذاریم تا در API فرستاده نشود
       });
       setLoading(false);
     };
     
     img.onerror = () => {
-      setError("Invalid image link or cannot be loaded");
+      setError("Invalid image link or cannot be loaded.");
       setPreview(null);
       setLocalQuiz({
         ...localQuiz,
@@ -73,77 +103,40 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
     
     img.src = imageUrl;
 
-    // تایم‌اوت برای تست
     setTimeout(() => {
       if (!img.complete) {
-        setError("Image loading took too long. Please try another link");
+        setError("Image loading took too long. Please try another link.");
         setLoading(false);
       }
     }, 5000);
   };
 
 
-
-
-
-
-
-
-
-
-  // مدیریت تغییر URL تصویر
-  // const handleUrlChange = (e) => {
-  //   const url = e.target.value.trim();
-  //   setImageUrl(url);
-  //   setError("");
-    
-  //   if (!url) {
-  //     setPreview(null);
-  //     setLocalQuiz({
-  //       ...localQuiz,
-  //       background_image_url: "",
-  //       background_color: localQuiz.background_color || "#ffffff",
-  //     });
-  //   }
-  // };
-
-
-
+  // Detecting changes from the initial value
   const handleUrlChange = (e) => {
-  const url = e.target.value.trim();
-  setImageUrl(url);
-  setError("");
-  
-  if (!url) {
-    setPreview(null);
-    setLocalQuiz({
-      ...localQuiz,
-      background_image_url: "",
-      // background_color را تغییر نمی‌دهیم
-    });
-  }
-};
+    const url = e.target.value.trim();
+    setImageUrl(url);
+    setError("");
+    
+    if (!url) {
+      setPreview(null);
+      setLocalQuiz({
+        ...localQuiz,
+        background_image_url: "",
+      });
+    }
+  };
 
 
-
-
-
-
-
-
-
-
-
-
-
-  // مدیریت ارسال URL با دکمه Enter
+  // Test and preview the inserted link by pressing the Enter key
   const handleUrlKeyPress = (e) => {
     if (e.key === 'Enter') {
       testImageLoad();
     }
   };
 
-  // رنگ‌های پیش‌فرض
+
+  // Default colors
   const colorOptions = [
     { name: "White", value: "#ffffff" },
     { name: "Light Blue", value: "#eff6ff" },
@@ -155,211 +148,126 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
     { name: "Custom", value: "custom" },
   ];
 
-  // مدیریت تغییر رنگ
-  // const handleColorChange = (color) => {
-  //   if (color === "custom") {
-  //     const input = document.createElement("input");
-  //     input.type = "color";
-  //     input.value = localQuiz.background_color || "#ffffff";
-  //     input.onchange = (e) => {
-  //       setLocalQuiz({
-  //         ...localQuiz,
-  //         background_color: e.target.value,
-  //         background_image_url: "", // وقتی رنگ انتخاب شد، عکس پاک شود
-  //       });
-  //       setImageUrl("");
-  //       setPreview(null);
-  //       setError("");
-  //     };
-  //     input.click();
-  //   } else {
-  //     setLocalQuiz({
-  //       ...localQuiz,
-  //       background_color: color,
-  //       background_image_url: "", // وقتی رنگ انتخاب شد، عکس پاک شود
-  //     });
-  //     setImageUrl("");
-  //     setPreview(null);
-  //     setError("");
-  //   }
-  // };
-
-
+  
+  // Set the selected color locally
   const handleColorChange = (color) => {
-  if (color === "custom") {
-    const input = document.createElement("input");
-    input.type = "color";
-    input.value = localQuiz.background_color || "#ffffff";
-    input.onchange = (e) => {
+    if (color === "custom") {
+      const input = document.createElement("input");
+      input.type = "color";
+      input.value = localQuiz.background_color || "#ffffff";
+      input.onchange = (e) => {
+        setLocalQuiz({
+          ...localQuiz,
+          background_color: e.target.value,
+          background_image_url: "", 
+        });
+        setImageUrl("");
+        setPreview(null);
+        setError("");
+      };
+      input.click();
+    } else {
       setLocalQuiz({
         ...localQuiz,
-        background_color: e.target.value,
-        background_image_url: "", // وقتی رنگ انتخاب شد، عکس پاک شود
+        background_color: color,
+        background_image_url: "",
       });
       setImageUrl("");
       setPreview(null);
       setError("");
-    };
-    input.click();
-  } else {
+    }
+  };
+
+
+  /*  
+    Temporarily remove image from the front end only; To completely remove image from the back and front, 
+    the "Save Changes" button must be pressed to execute the "handleSubmit".
+  */
+  const handleRemoveImage = () => {
     setLocalQuiz({
       ...localQuiz,
-      background_color: color,
-      background_image_url: "", // وقتی رنگ انتخاب شد، عکس پاک شود
+      background_image_url: "",
     });
     setImageUrl("");
     setPreview(null);
     setError("");
-  }
-};
+  };
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-  // حذف عکس بک‌گراند
-  // const handleRemoveImage = () => {
-  //   setLocalQuiz({
-  //     ...localQuiz,
-  //     background_image_url: "",
-  //     background_color: localQuiz.background_color || "#ffffff",
-  //   });
-  //   setImageUrl("");
-  //   setPreview(null);
-  //   setError("");
-  // };
-
-
-  const handleRemoveImage = () => {
-  setLocalQuiz({
-    ...localQuiz,
-    background_image_url: "",
-    // background_color را تغییر نمی‌دهیم
-  });
-  setImageUrl("");
-  setPreview(null);
-  setError("");
-};
-
-
-
-
-
-
-
-  // ذخیره تغییرات در سرور
-  // const handleSubmit = async () => {
-  //   if (!hasChanges) {
-  //     onClose();
-  //     return;
-  //   }
-
-  //   try {
-  //     setSaving(true);
-      
-  //     // داده‌های تغییر یافته را آماده می‌کنیم
-  //     const updateData = {
-  //       background_color: localQuiz.background_color,
-  //       background_image_url: localQuiz.background_image_url
-  //     };
-
-  //     // فراخوانی API برای به‌روزرسانی
-  //     const updatedQuiz = await quizService.updateQuizBackground(
-  //       quiz.quiz_id,
-  //       updateData
-  //     );
-      
-  //     console.log("Design changes saved to backend", updatedQuiz);
-      
-  //     // به‌روزرسانی quiz در parent component
-  //     updateQuiz(updatedQuiz);
-      
-  //     // به‌روزرسانی مقدار اولیه
-  //     setOriginalQuiz({ ...localQuiz });
-      
-  //     setSaving(false);
-  //     onClose();
-      
-  //   } catch (error) {
-  //     console.error("Error saving to backend:", error);
-  //     setSaving(false);
-  //     alert("Failed to save changes. Please try again.");
-  //   }
-  // };
-
-
+  // Save image changes in front end and back end
   const handleSubmit = async () => {
-  if (!hasChanges) {
-    onClose();
-    return;
-  }
-
-  try {
-    setSaving(true);
-    
-    // فقط فیلدهایی که تغییر کرده‌اند را می‌فرستیم
-    const updateData = {};
-    
-    if (localQuiz.background_color !== originalQuiz.background_color) {
-      updateData.background_color = localQuiz.background_color || "#ffffff";
-    }
-    
-    if (localQuiz.background_image_url !== originalQuiz.background_image_url) {
-      updateData.background_image_url = localQuiz.background_image_url;
+    if (!hasChanges) {
+      onClose();
+      return;
     }
 
-    // فراخوانی API برای به‌روزرسانی
-    const updatedQuiz = await quizService.updateQuizBackground(
-      quiz.quiz_id,
-      updateData
-    );
-    
-    console.log("Design changes saved to backend", updatedQuiz);
-    
-    // به‌روزرسانی quiz در parent component
-    updateQuiz(updatedQuiz);
-    
-    // به‌روزرسانی مقدار اولیه
-    setOriginalQuiz({ ...localQuiz });
-    
-    setSaving(false);
-    onClose();
-    
-  } catch (error) {
-    console.error("Error saving to backend:", error);
-    setSaving(false);
-    alert("Failed to save changes. Please try again.");
-  }
-};
+    try {
+      setSaving(true);
+      
+      const updateData = {};
+      
+      if (localQuiz.background_color !== originalQuiz.background_color) {
+        updateData.background_color = localQuiz.background_color || "#ffffff";
+      }
+      
+      if (localQuiz.background_image_url !== originalQuiz.background_image_url) {
+        updateData.background_image_url = localQuiz.background_image_url;
+      }
+
+      // Send a request to the back end to update the background
+      const updatedQuiz = await quizService.updateQuizBackground(
+        quiz.quiz_id,
+        updateData
+      );
+      
+      // Updating the quiz in the parent component(EditorPage)
+      updateQuiz(updatedQuiz);
+      
+      setOriginalQuiz({ ...localQuiz });
+      
+      setSaving(false);
+      onClose();
+
+      if (setBackgroundSaveNotice) {
+        setBackgroundSaveNotice("Quiz background changed successfully.");
+        setTimeout(() => {
+          setBackgroundSaveNotice(null);
+        }, 2500);
+      }
+
+      setHasChanges(false);
+      if (onDirtyChange) {
+        onDirtyChange(false);
+      }
+      
+    } catch {
+      setSaving(false);
+      setErrorForModal("Failed to save changes. Please try again.");
+      setErrorModalOpen(true);
+    }
+  };
 
 
-
-
-
-
-
-
-
-
-  // لغو تغییرات
+  // Cancel changes
   const handleCancel = () => {
     if (hasChanges) {
-      const confirmCancel = window.confirm(
-        "You have unsaved changes. Are you sure you want to cancel?"
-      );
-      if (!confirmCancel) return;
+      setConfirmDialog({
+        isOpen: true,
+        title: "Unsaved Changes",
+        description: "You have unsaved changes. Are you sure you want to cancel?",
+        onConfirm: () => {
+          resetToOriginal();
+        },
+        confirmText: "Discard Changes",
+        cancelText: "Keep Editing",
+      });
+      return;
     }
     
-    // برگرداندن به حالت اولیه
+    resetToOriginal();
+  };
+
+  const resetToOriginal = () => {
     setLocalQuiz({ ...originalQuiz });
     if (originalQuiz.background_image_url) {
       setImageUrl(originalQuiz.background_image_url);
@@ -373,7 +281,30 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
     onClose();
   };
 
-  // محاسبه استایل برای نمایش بک‌گراند
+  const handleConfirm = () => {
+    if (confirmDialog.onConfirm) {
+      confirmDialog.onConfirm();
+    }
+    closeConfirmDialog();
+  };
+
+  const closeConfirmDialog = () => {
+    setConfirmDialog({
+      isOpen: false,
+      title: "",
+      description: "",
+      onConfirm: null,
+      confirmText: "",
+      cancelText: "",
+    });
+  };
+
+  const handleCancelForModal = () => {
+    closeConfirmDialog();
+  };
+
+
+  // Calculating the style for displaying the background
   const getBackgroundStyle = () => {
     if (preview) {
       return {
@@ -386,7 +317,6 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
         backgroundColor: localQuiz.background_color,
       };
     } else if (localQuiz.background_image_url && !preview) {
-      // اگر URL ذخیره شده اما preview نداریم
       return {
         backgroundImage: `url(${localQuiz.background_image_url})`,
         backgroundSize: 'cover',
@@ -398,9 +328,10 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
     };
   };
 
+
   return (
     <div className="h-full overflow-y-auto p-4">
-      {/* Header */}
+      {/* --------------- Header --------------- */}
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <div>
@@ -420,7 +351,8 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
         </button>
       </div>
 
-      {/* تب‌ها */}
+
+      {/* --------------- Color And Image Tabs --------------- */}
       <div className="flex mb-6">
         <button
           onClick={() => setActiveTab("color")}
@@ -444,7 +376,8 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
         </button>
       </div>
 
-      {/* محتوا */}
+
+      {/* --------------- Content --------------- */}
       {activeTab === "color" ? (
         <div className="space-y-6">
           <div>
@@ -532,11 +465,11 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
                   {error}
                 </div>
               )}
-              
-              
             </div>
           </div>
 
+          
+          {/* --------------- Preview Section --------------- */}
           <div>
             <h3 className="text-sm font-medium text-gray-700 mb-3">
               Preview :
@@ -587,6 +520,8 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
         </div>
       )}
 
+
+      {/* --------------- Save And Cancel Buttons --------------- */}
       <div className="mt-8 pt-6 border-t border-gray-200">
         <div className="flex gap-3">
           <button
@@ -624,6 +559,24 @@ export default function DesignPanel({ quiz, updateQuiz, onClose }) {
           }
         </p>
       </div>
+
+      <ErrorModal
+        isOpen={errorModalOpen}
+        onClose={closeErrorModal}
+        message={errorForModal}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={handleCancelForModal}
+        onConfirm={handleConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        confirmVariant="destructive"
+        isLoading={false}
+      />
     </div>
   );
 }

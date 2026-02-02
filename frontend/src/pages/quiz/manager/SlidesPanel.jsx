@@ -1,9 +1,38 @@
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { GripVertical, Trash2, Trophy } from "lucide-react";
 import { quizService } from "../../../services/quizService";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { ConfirmDialog } from "../../../components/ui/confirm-dialog";
+
+
+const buildDisplaySlides = (slidesData) => {
+  const result = [];
+
+  slidesData.forEach((slide) => {
+    result.push({ ...slide, isSynthetic: false });
+
+    if (slide.slide_type === 1 && slide.show_leaderboard_after) {
+      result.push({
+        slide_id: slide.slide_id,
+        slide_type: 3,
+        order: slide.order,
+        show_leaderboard_after: false,
+        title: null,
+        content_text: null,
+        content_image_url: null,
+        question: null,
+        leaderboard: [],
+        isSynthetic: true,
+        sourceSlideId: slide.slide_id,
+      });
+    }
+  });
+
+  return result;
+};
 
 export default function SlidesPanel({
+  slides = [],
   activeSlideId,
   setActiveSlideId,
   setActiveSlideTypeParent,
@@ -13,136 +42,61 @@ export default function SlidesPanel({
   getSlideTitle,
   quizId,
   quizBackground = "#ffffff",
-  quizBackgroundImage = ""
+  quizBackgroundImage = "",
+  onLeaderboardDeleted,
+  onSlidesReordered,
+  onRefresh,
+  onNotify
 }) {
   const [isReordering, setIsReordering] = useState(false);
-  const [processedSlides, setProcessedSlides] = useState([]);
   const [localSlides, setLocalSlides] = useState([]);
-  const [activeSlideType, setActiveSlideType] = useState(null); // حالت جدید برای ذخیره slide_type اسلاید فعال
+  const [activeSlideType, setActiveSlideType] = useState(null); // ???? ???? ???? ????? slide_type ?????? ????
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    description: "",
+    onConfirm: null,
+    confirmText: "",
+    cancelText: "",
+  });
 
-  // تابع برای پردازش اسلایدها
-  // const processSlides = (slidesData) => {
-  //   const result = [];
-  //   let i = 0;
-
-  //   while (i < slidesData.length) {
-  //     const currentSlide = slidesData[i];
-      
-  //     if (currentSlide.slide_type === 3) { // لیدربرد
-  //       const prevSlide = i > 0 ? slidesData[i - 1] : null;
-        
-  //       if (prevSlide && prevSlide.slide_type === 1 && 
-  //           currentSlide.order === prevSlide.order) {
-  //         result.push(currentSlide);
-  //         i++;
-  //       } else {
-  //         result.push(currentSlide);
-  //         i++;
-  //       }
-  //     } else {
-  //       result.push(currentSlide);
-  //       i++;
-  //     }
-  //   }
-
-  //   return result;
-  // };
-
-
-  // تابع برای پردازش اسلایدها
-const processSlides = useCallback((slidesData) => {
-  const result = [];
-  let i = 0;
-
-  console.log("Processing slides:", slidesData);
-
-  while (i < slidesData.length) {
-    const currentSlide = slidesData[i];
-    
-    console.log(`Processing slide ${i}:`, currentSlide.slide_id, currentSlide.slide_type, currentSlide.order);
-    
-    if (currentSlide.slide_type === 3) { // لیدربرد
-      console.log("Found leaderboard slide");
-      const prevSlide = i > 0 ? slidesData[i - 1] : null;
-      
-      if (prevSlide && prevSlide.slide_type === 1 && 
-          currentSlide.order === prevSlide.order) {
-        console.log("Leaderboard is linked to previous question");
-        result.push(currentSlide);
-        i++;
-      } else {
-        console.log("Standalone leaderboard or order mismatch");
-        result.push(currentSlide);
-        i++;
-      }
+  const notify = (message, tone = "error") => {
+    if (onNotify) {
+      onNotify(message, tone);
     } else {
-      console.log("Regular slide");
-      result.push(currentSlide);
-      i++;
+      alert(message);
     }
-  }
+  };
 
-  console.log("Processed result:", result);
-  return result;
-}, []);
+  // ???? ???? ?????? ????????
 
-
-
-  //////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-  // تابع برای دریافت اسلایدها از API
-  const fetchSlides = useCallback(async () => {
-    try {
-      const quizData = await quizService.getSlidesFromAPI(quizId);
-      const slidesData = quizData.slides;
-      const processed = processSlides(slidesData);
-      setProcessedSlides(processed);
-      setLocalSlides(processed);
-    } catch (error) {
-      console.error("Error fetching slides:", error);
-    }
-  }, [processSlides, quizId]);
-
-  // دریافت اولیه اسلایدها
+  // ???? ???? ?????? ???????? ?? API
   useEffect(() => {
-    if (quizId) {
-      fetchSlides();
-    }
-  }, [fetchSlides, quizId]);
+    setLocalSlides(slides);
 
-
-  // به‌روزرسانی localSlides وقتی processedSlides تغییر کرد
-  useEffect(() => {
-    setLocalSlides(processedSlides);
-    
-    // وقتی اسلایدها بارگیری شدند، slide_type اسلاید فعال را پیدا کن
-    if (activeSlideId && processedSlides.length > 0) {
-      const activeSlide = processedSlides.find(s => s[idKey] === activeSlideId);
+    if (activeSlideId && slides.length > 0) {
+      const activeSlide = slides.find((s) => s[idKey] === activeSlideId);
       if (activeSlide) {
         setActiveSlideType(activeSlide.slide_type);
+        if (setActiveSlideTypeParent) {
+          setActiveSlideTypeParent(activeSlide.slide_type);
+        }
       }
     }
-  }, [processedSlides, activeSlideId, idKey]);
+  }, [slides, activeSlideId, idKey, setActiveSlideTypeParent]);
 
+  const displaySlides = useMemo(
+    () => buildDisplaySlides(localSlides),
+    [localSlides]
+  );
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  // تابع برای به‌روزرسانی اسلایدها
-  const refreshSlides = () => {
-    fetchSlides();
-  };
+  const draggableIndexMap = useMemo(() => {
+    const map = new Map();
+    localSlides.forEach((slide, index) => {
+      map.set(`${slide[idKey]}-${slide.slide_type}`, index);
+    });
+    return map;
+  }, [localSlides, idKey]);
 
   const handleDragEnd = async (result) => {
     if (!result.destination) return;
@@ -157,107 +111,146 @@ const processSlides = useCallback((slidesData) => {
       return;
     }
     
+    const previousSlides = Array.from(localSlides);
     const newSlides = Array.from(localSlides);
     const [movedSlide] = newSlides.splice(sourceIndex, 1);
     newSlides.splice(destinationIndex, 0, movedSlide);
     
     setLocalSlides(newSlides);
     
-    const newOrder = destinationIndex + 1;
-    
     try {
-      await quizService.updateSlideOrder(quizId, movedSlide[idKey], newOrder);
-      refreshSlides();
+      const slideIds = newSlides.map((slide) => slide[idKey]);
+      await quizService.reorderSlides(quizId, slideIds);
+      if (onSlidesReordered) {
+        onSlidesReordered(newSlides);
+      }
     } catch (error) {
       console.error("Failed to update slide order:", error);
-      alert("❌ Failed to reorder slide");
-      setLocalSlides(processedSlides);
+      notify("Failed to reorder slide.", "error");
+      setLocalSlides(previousSlides);
     } finally {
       setIsReordering(false);
     }
   };
 
-  ////////////////////////////////////////////////////////////////////////////////////////////
 
-  const handleDeleteSlide = async (slideId, slideType) => {
-  if (!window.confirm("Are you sure you want to delete this slide?")) return;
+  const handleDeleteSlide = (slideId, slideType) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "Delete Slide",
+      description: "Are you sure you want to delete this slide?",
+      onConfirm: async () => {
+        await performDeleteSlide(slideId, slideType);
+      },
+      confirmText: "Delete",
+      cancelText: "Cancel",
+    });
+  };
 
-  try {
-    const slideToDelete = processedSlides.find(
-      s => s[idKey] === slideId && s.slide_type === slideType
-    );
-
-    if (!slideToDelete) return;
-
-    if (slideType === 3) {
-      // حذف فقط لیدربرد مرتبط
-      const questionSlide = processedSlides.find(
-        s => s.slide_type === 1 && s.order === slideToDelete.order
+  const performDeleteSlide = async (slideId, slideType) => {
+    try {
+      const slideToDelete = displaySlides.find(
+        (s) => s[idKey] === slideId && s.slide_type === slideType
       );
 
-      if (questionSlide) {
-        await quizService.deleteLeaderboardSlide(
-          quizId,
-          questionSlide[idKey]
+      if (!slideToDelete) return;
+
+      if (slideType === 3) {
+        if (onLeaderboardDeleted) {
+          await onLeaderboardDeleted(slideId);
+        }
+
+        // ??? ??? ??????? ?????
+        const questionSlide = localSlides.find(
+          (s) => s.slide_type === 1 && s.order === slideToDelete.order
         );
+
+        if (questionSlide) {
+          await quizService.deleteLeaderboardSlide(
+            quizId,
+            questionSlide[idKey]
+          );
+        } else {
+          await deleteSlide(slideId);
+        }
       } else {
+        // ??? ?????? ?????
         await deleteSlide(slideId);
       }
-    } else {
-      // حذف اسلاید معمولی
-      await deleteSlide(slideId);
-    }
 
-    refreshSlides();
-  } catch (error) {
-    console.error("Failed to delete slide:", error);
-    alert("❌ Failed to delete slide");
-  }
-};
-
-
-
-  ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-  // تابع اضافه کردن اسلاید جدید
-  const handleAddSlide = async () => {
-    try {
-      await addNewSlide();
-      refreshSlides();
+      if (onRefresh) {
+        await onRefresh();
+      }
     } catch (error) {
-      console.error("Failed to add new slide:", error);
-      alert("❌ Failed to add new slide");
+      console.error("Failed to delete slide:", error);
+      notify("Failed to delete slide.", "error");
     }
   };
 
-  // تابع کلیک روی اسلاید - کلید اصلی حل مشکل
+  const handleConfirm = () => {
+    if (confirmDialog.onConfirm) {
+      confirmDialog.onConfirm();
+    }
+    closeConfirmDialog();
+  };
+
+  const closeConfirmDialog = () => {
+    setConfirmDialog({
+      isOpen: false,
+      title: "",
+      description: "",
+      onConfirm: null,
+      confirmText: "",
+      cancelText: "",
+    });
+  };
+
+  const handleCancelForModal = () => {
+    closeConfirmDialog();
+  };
+
+
+  // ???? ????? ???? ?????? ????
+  const handleAddSlide = async () => {
+    try {
+      await addNewSlide();
+      if (onRefresh) {
+        await onRefresh();
+      }
+    } catch (error) {
+      console.error("Failed to add new slide:", error);
+      notify("Failed to add new slide.", "error");
+    }
+  };
+
+  // ???? ???? ??? ?????? - ???? ???? ?? ????
   const handleSlideClick = (slide) => {
-    // همیشه slide_id را به پرنت پاس می‌دهیم
+    // ????? slide_id ?? ?? ???? ??? ???????
     setActiveSlideId(slide[idKey]);
-    // و slide_type اسلاید فعلی را هم ذخیره می‌کنیم
+    // ? slide_type ?????? ???? ?? ?? ????? ???????
     setActiveSlideType(slide.slide_type);
     setActiveSlideTypeParent(slide.slide_type);
   };
 
-  // تابع برای بررسی اینکه آیا اسلاید فعلی انتخاب شده است
+  // ???? ???? ????? ????? ??? ?????? ???? ?????? ??? ???
   const isSlideActive = (slide) => {
-    // اول بررسی کن که آیا slide_id مطابقت دارد
+    // ??? ????? ?? ?? ??? slide_id ?????? ????
     if (slide[idKey] !== activeSlideId) {
       return false;
     }
     
-    // اگر slide_id مطابقت دارد، حالا باید slide_type را هم بررسی کنیم
-    // اگر slide_type ذخیره شده داریم (activeSlideType) از آن استفاده کن
+    // ??? slide_id ?????? ????? ???? ???? slide_type ?? ?? ????? ????
+    // ??? slide_type ????? ??? ????? (activeSlideType) ?? ?? ??????? ??
     if (activeSlideType !== null) {
       return slide.slide_type === activeSlideType;
     }
     
-    // اگر activeSlideType نداریم، ممکن است مشکل ایجاد شود
-    // در این حالت، فرض می‌کنیم که اولین اسلاید با این slide_id انتخاب شده
+    // ??? activeSlideType ??????? ???? ??? ???? ????? ???
+    // ?? ??? ????? ??? ??????? ?? ????? ?????? ?? ??? slide_id ?????? ???
     return true;
   };
 
-  // تابع کمکی برای دریافت نوع سوال
+  // ???? ???? ???? ?????? ??? ????
   const getQuestionType = (slide) => {
     if (slide.slide_type === 3) {
       return "Leaderboard";
@@ -272,7 +265,7 @@ const processSlides = useCallback((slidesData) => {
     return "Not Selected";
   };
 
-  // تابع برای دریافت پس‌زمینه اسلاید
+  // ???? ???? ?????? ???????? ??????
   const getSlideBackground = () => {
     if (quizBackgroundImage) {
       return {
@@ -287,39 +280,25 @@ const processSlides = useCallback((slidesData) => {
     };
   };
 
-  // بررسی آیا اسلاید لیدربرد بعد از این اسلاید وجود دارد
+  // ????? ??? ?????? ??????? ??? ?? ??? ?????? ???? ????
   const hasLeaderboardAfter = (slide) => {
     if (slide.slide_type !== 1) return false;
-    
-    const currentIndex = localSlides.findIndex(s => s[idKey] === slide[idKey] && s.slide_type === slide.slide_type);
-    if (currentIndex !== -1 && currentIndex + 1 < localSlides.length) {
-      const nextSlide = localSlides[currentIndex + 1];
-      return nextSlide.slide_type === 3 && 
-            nextSlide.order === slide.order;
-    }
-    return false;
+
+    return !!slide.show_leaderboard_after;
   };
 
-  // تابع برای غیرفعال کردن درگ برای اسلایدهای لیدربرد
+  // ???? ???? ??????? ???? ??? ???? ????????? ???????
   const isDragDisabled = (slide) => {
-    if (slide.slide_type === 3) {
-      const slideIndex = localSlides.findIndex(s => s[idKey] === slide[idKey] && s.slide_type === slide.slide_type);
-      if (slideIndex > 0) {
-        const prevSlide = localSlides[slideIndex - 1];
-        if (prevSlide.slide_type === 1 && 
-            slide.order === prevSlide.order) {
-          return true;
-        }
-      }
+    if (slide.isSynthetic || slide.slide_type === 3) {
+      return true;
     }
     return isReordering;
   };
 
-  // محاسبه order برای نمایش
 
-  // تابع برای ایجاد key منحصربفرد برای هر اسلاید
+  // ???? ???? ????? key ????????? ???? ?? ??????
   const getUniqueKey = (slide) => {
-    // ترکیب slide_id و slide_type برای ایجاد key منحصربفرد
+    // ????? slide_id ? slide_type ???? ????? key ?????????
     return `${slide[idKey]}-${slide.slide_type}`;
   };
 
@@ -340,20 +319,78 @@ const processSlides = useCallback((slidesData) => {
               ref={provided.innerRef}
               className="space-y-4"
             >
-              {localSlides.map((slide, index) => {
-                const slideBackground = getSlideBackground();
+              {displaySlides.map((slide) => {
+                const slideBackground = getSlideBackground(slide);
                 const isLeaderboardSlide = slide.slide_type === 3;
                 const isQuestionSlide = slide.slide_type === 1;
                 const slideTitle = getSlideTitle(slide);
                 const dragDisabled = isDragDisabled(slide);
                 const isActive = isSlideActive(slide);
                 const uniqueKey = getUniqueKey(slide);
+                const draggableIndex = draggableIndexMap.get(uniqueKey);
+
+                if (slide.isSynthetic) {
+                  return (
+                    <div
+                      key={uniqueKey}
+                      onClick={() => handleSlideClick(slide)}
+                      className={`relative cursor-pointer border rounded-lg overflow-hidden transition-all
+                        w-full aspect-[16/9] max-w-[360px] mx-auto
+                        ${isActive
+                          ? "border-slate-600 outline-2 outline-slate-500 outline"
+                          : "border-gray-300 hover:shadow-md"
+                        }
+                      `}
+                      style={slideBackground}
+                    >
+                      {/* Delete button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteSlide(slide[idKey], slide.slide_type);
+                        }}
+                        disabled={isReordering}
+                        className="absolute top-1 right-2 p-2 rounded-md bg-white/90 hover:bg-red-50 text-red-600 shadow-sm z-20 disabled:opacity-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+
+                      {/* Title */}
+                      <div
+                        className="absolute top-10 left-2 right-2 text-sm font-semibold text-black/90 bg-white/80 p-2 rounded leading-tight overflow-hidden text-center"
+                        style={{
+                          maxHeight: "110px",
+                          wordBreak: "break-word",
+                          WebkitLineClamp: 6,
+                          display: "-webkit-box",
+                          WebkitBoxOrient: "vertical",
+                        }}
+                      >
+                        <div className="flex flex-col items-center gap-2">
+                          <Trophy className="w-8 h-8 text-yellow-500" />
+                          {slideTitle}
+                        </div>
+                      </div>
+
+                      {/* Type and info */}
+                      <div className="absolute bottom-2 left-2 right-2 text-xs text-center space-y-1">
+                        <div className="bg-white/80 py-1 rounded font-medium text-gray-700">
+                          {getQuestionType(slide)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (draggableIndex === undefined) {
+                  return null;
+                }
 
                 return (
                   <Draggable
-                    key={uniqueKey} // استفاده از key منحصربفرد
-                    draggableId={uniqueKey} // استفاده از شناسه منحصربفرد برای drag
-                    index={index}
+                    key={uniqueKey}
+                    draggableId={uniqueKey}
+                    index={draggableIndex}
                     isDragDisabled={dragDisabled}
                   >
                     {(provided, snapshot) => {
@@ -399,7 +436,6 @@ const processSlides = useCallback((slidesData) => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              // handleDeleteSlide(slide[idKey]);
                               handleDeleteSlide(slide[idKey], slide.slide_type);
                             }}
                             disabled={isReordering}
@@ -407,11 +443,6 @@ const processSlides = useCallback((slidesData) => {
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
-
-                          {/* Order indicator */}
-                          {/* <div className="absolute top-1 left-1 p-1.5 bg-black/70 text-white text-xs rounded-md z-20">
-                            {getDisplayOrder(slide, index)}
-                          </div> */}
 
                           {/* Leaderboard indicator for question slides */}
                           {isQuestionSlide && hasLeaderboardAfter(slide) && (
@@ -436,11 +467,6 @@ const processSlides = useCallback((slidesData) => {
                               <div className="flex flex-col items-center gap-2">
                                 <Trophy className="w-8 h-8 text-yellow-500" />
                                 {slideTitle}
-                                {/* {dragDisabled && (
-                                  <span className="text-xs text-gray-500 italic">
-                                    (Linked to previous slide)
-                                  </span>
-                                )} */}
                               </div>
                             ) : (
                               slideTitle
@@ -473,8 +499,20 @@ const processSlides = useCallback((slidesData) => {
           w-full aspect-[16/9] max-w-[360px] mx-auto flex items-center justify-center
           ${isReordering ? 'opacity-50 cursor-not-allowed' : 'border-gray-300 text-gray-500 hover:border-green-300'}`}
       >
-        ➕ Add Slide
+        + Add Slide
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={handleCancelForModal}
+        onConfirm={handleConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        confirmVariant="destructive"
+        isLoading={false}
+      />
     </div>
   );
 }

@@ -134,6 +134,8 @@ def test_final_leaderboard_tie_ranking(api_client):
     api_client.force_authenticate(user=owner)
     resp = api_client.get(f"/api/quizzes/{quiz.id}/final-leaderboard/")
     assert resp.status_code == 200
+    assert resp.data["quiz_title"] == quiz.title
+    assert "updated_at" in resp.data
 
     leaderboard = {entry["rust_session_id"]: entry for entry in resp.data["leaderboard"]}
     assert leaderboard[p1.rust_session_id]["rank"] == 1
@@ -160,7 +162,31 @@ def test_final_leaderboard_falls_back_to_leaderboard_names(api_client):
     api_client.force_authenticate(user=owner)
     resp = api_client.get(f"/api/quizzes/{quiz.id}/final-leaderboard/")
     assert resp.status_code == 200
+    assert resp.data["quiz_title"] == quiz.title
+    assert "updated_at" in resp.data
     entry = resp.data["leaderboard"][0]
     assert entry["rust_session_id"] == "orphan"
     assert entry["player_name"] == "Fallback"
     assert entry["avatar"] == "F"
+
+
+@pytest.mark.django_db
+def test_editor_data_returns_real_slides_only(api_client):
+    owner = UserFactory()
+    quiz = QuizFactory(owner=owner, background_color="#123456")
+    question_slide = SlideFactory(
+        quiz=quiz,
+        slide_type=1,
+        order=1,
+        show_leaderboard_after=True,
+    )
+    QuestionFactory(slide=question_slide)
+    SlideFactory(quiz=quiz, slide_type=2, order=2)
+
+    api_client.force_authenticate(user=owner)
+    resp = api_client.get(f"/api/quizzes/{quiz.id}/editor-data/")
+    assert resp.status_code == 200
+    assert resp.data["quiz_id"] == quiz.id
+    assert resp.data["background_color"] == "#123456"
+    slide_types = {slide["slide_type"] for slide in resp.data["slides"]}
+    assert 3 not in slide_types

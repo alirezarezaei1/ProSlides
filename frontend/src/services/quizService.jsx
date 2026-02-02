@@ -1,35 +1,112 @@
-import axios from 'axios';
-import { getApiBase } from "../utils/api";
-import { getAuthHeaders } from "../utils/auth";
+// This component manages the connection to the back-end components of the pages/quiz/manger folder
+
+import axios from "axios";
+import { buildApiUrl, getApiBase } from "../utils/api";
+import {
+  clearAuthStorage,
+  getAuthHeaders,
+  getRefreshToken,
+  notifyAuthExpired,
+  notifyAppNotice,
+} from "../utils/auth";
+
 
 const api = axios.create({ baseURL: getApiBase() });
+const isAuthFailureStatus = (status) => status === 401 || status === 419;
+const isForbiddenStatus = (status) => status === 403;
+const isRateLimitStatus = (status) => status === 429;
+
+let refreshPromise = null;
+
+const refreshAccessToken = async () => {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    const refresh = getRefreshToken();
+    if (!refresh) return null;
+
+    const response = await fetch(buildApiUrl("/auth/token/refresh/"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh }),
+    });
+
+    if (!response.ok) {
+      clearAuthStorage();
+      return null;
+    }
+
+    const payload = await response.json().catch(() => null);
+    if (payload?.access) {
+      localStorage.setItem("auth.access", payload.access);
+      return payload.access;
+    }
+
+    clearAuthStorage();
+    return null;
+  })();
+
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
+  }
+};
 
 api.interceptors.request.use((config) => {
   config.headers = { ...config.headers, ...getAuthHeaders() };
   return config;
 });
 
-// const API_BASE_URL = 'https://api.proslides.ir/api';
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const status = error?.response?.status;
+    const originalRequest = error?.config;
+
+    if (isAuthFailureStatus(status) && originalRequest && !originalRequest._retry) {
+      originalRequest._retry = true;
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) {
+        clearAuthStorage();
+        if (!originalRequest?.silent) {
+          notifyAuthExpired("auth-required");
+        }
+        return Promise.reject(error);
+      }
+      const newAccess = await refreshAccessToken();
+      if (newAccess) {
+        originalRequest.headers = {
+          ...originalRequest.headers,
+          Authorization: `Bearer ${newAccess}`,
+        };
+        return api(originalRequest);
+      }
+    }
+
+    if (isAuthFailureStatus(status)) {
+      clearAuthStorage();
+      if (!originalRequest?.silent) {
+        notifyAuthExpired("session-expired");
+      }
+    }
+
+    if (!originalRequest?.silent && isForbiddenStatus(status)) {
+      notifyAppNotice("access-denied", "error");
+    }
+
+    if (!originalRequest?.silent && isRateLimitStatus(status)) {
+      notifyAppNotice("rate-limit", "warning");
+    }
+
+    return Promise.reject(error);
+  }
+);
+
 
 export const quizService = {
-  // ایجاد کوئیز خالی
-  createEmptyQuiz: async () => {
-    try {
-      const response = await api.post(`/quizzes/`, {
-        title: "Default",
-        author: "anonymous",
-        music_url: "",
-        background_color: "#ffffff",
-        background_image_url: ""
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error creating quiz:', error);
-      throw error;
-    }
-  },
 
-  // دریافت کوئیز
+  // Getting a quiz
   getQuiz: async (quizId) => {
     try {
       const response = await api.get(`/quizzes/${quizId}/`);
@@ -40,7 +117,19 @@ export const quizService = {
     }
   },
 
-  // به‌روزرسانی کوئیز
+  // Getting quiz data for the editor
+  getEditorQuiz: async (quizId) => {
+    try {
+      const response = await api.get(`/quizzes/${quizId}/editor-data/`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching editor quiz:', error);
+      throw error;
+    }
+  },
+
+
+  // Updating a quiz
   updateQuiz: async (quizId, quizData) => {
     try {
       const response = await api.put(`/quizzes/${quizId}/`, quizData);
@@ -51,11 +140,13 @@ export const quizService = {
     }
   },
 
+
+  // Just update the quiz music
   updateQuizMusic: async (quizId, musicUrl) => {
     try {
       const response = await api.patch(
         `/quizzes/${quizId}/`,
-        { music_url: musicUrl } // تغییر فیلد به music_url
+        { music_url: musicUrl } 
       );
       return response.data;
     } catch (error) {
@@ -64,9 +155,10 @@ export const quizService = {
     }
   },
 
+
+  // Just Update the quiz background 
   updateQuizBackground: async (quizId, backgroundData) => {
     try {
-      // فقط فیلدهایی که مقدار دارند را می‌فرستیم
       const payload = {};
       
       if (backgroundData.background_color !== undefined) {
@@ -88,7 +180,8 @@ export const quizService = {
     }
   },
 
-  // دریافت سوال
+
+  // Getting question of a slide of a quiz
   getQuestion: async (quizId, slideId) => {
     try {
       const response = await api.get(
@@ -96,7 +189,6 @@ export const quizService = {
       );
       return response.data;
     } catch (error) {
-      // اگر سوال وجود نداشت، null برمی‌گردانیم
       if (error.response?.status === 404) {
         return null;
       }
@@ -105,7 +197,8 @@ export const quizService = {
     }
   },
 
-  // ایجاد سوال جدید
+
+  // Create a new question for a quiz slide
   createQuestion: async (quizId, slideId, questionData) => {
     try {
       const response = await api.post(
@@ -119,7 +212,8 @@ export const quizService = {
     }
   },
 
-  // به‌روزرسانی سوال موجود
+
+  // Update existing question
   updateQuestion: async (quizId, slideId, questionData) => {
     try {
       const response = await api.put(
@@ -133,7 +227,8 @@ export const quizService = {
     }
   },
 
-  // دریافت گزینه‌های سوال
+
+  // Getting options of a question of a quiz slide
   getOptions: async (quizId, slideId) => {
     try {
       const response = await api.get(
@@ -146,7 +241,8 @@ export const quizService = {
     }
   },
 
-  // ایجاد گزینه جدید
+
+  // Create a new option for question
   createOption: async (quizId, slideId, optionData) => {
     try {
       const response = await api.post(
@@ -160,7 +256,8 @@ export const quizService = {
     }
   },
 
-  // به‌روزرسانی گزینه موجود
+
+  // Update an existing option
   updateOption: async (quizId, slideId, optionId, optionData) => {
     try {
       const response = await api.put(
@@ -174,7 +271,8 @@ export const quizService = {
     }
   },
 
-  // حذف گزینه
+
+  // Delete an option
   deleteOption: async (quizId, slideId, optionId) => {
     try {
       await api.delete(
@@ -187,6 +285,7 @@ export const quizService = {
   },
 
 
+  // Create a new slide for quiz
   createSlide: async (quizId, slideData) => {
     try {
       const response = await api.post(
@@ -200,7 +299,8 @@ export const quizService = {
     }
   },
 
-  // به‌روزرسانی اسلاید (برای show_leaderboard_after)
+
+  // Update a slide
   updateSlide: async (quizId, slideId, slideData) => {
     try {
       const response = await api.put(
@@ -214,7 +314,8 @@ export const quizService = {
     }
   },
 
-  // حذف اسلاید
+
+  // Delete a slide
   deleteSlide: async (quizId, slideId) => {
     try {
       await api.delete(
@@ -227,7 +328,7 @@ export const quizService = {
   },
 
 
-  // به‌روزرسانی order یک اسلاید
+  // Just for update order of a slide
   updateSlideOrder: async (quizId, slideId, order) => {
     try {
       const response = await api.patch(
@@ -242,6 +343,36 @@ export const quizService = {
   },
 
 
+  // Get leaderboard entries for a question slide
+  getQuestionLeaderboard: async (quizId, slideId) => {
+    try {
+      const response = await api.get(
+        `/quizzes/${quizId}/slides/${slideId}/question/leaderboard/`
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching question leaderboard:', error);
+      throw error;
+    }
+  },
+
+
+  // Reorder slides for a quiz
+  reorderSlides: async (quizId, slideIds) => {
+    try {
+      const response = await api.post(
+        `/quizzes/${quizId}/slides/reorder/`,
+        { slide_ids: slideIds }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error reordering slides:', error);
+      throw error;
+    }
+  },
+
+
+  // Getting slides with their leaderboards
   getSlidesFromAPI : async (quizId) => {
     try {
       const response = await api.get(
@@ -254,6 +385,8 @@ export const quizService = {
     }
   },
 
+
+  // Delete leaderboard slide of a question slide
   deleteLeaderboardSlide : async (quizId, slideId) => {
     try {
         const response = await api.patch(
@@ -266,5 +399,4 @@ export const quizService = {
         throw error;
     }
   },
-
 };
